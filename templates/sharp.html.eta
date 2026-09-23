@@ -1,0 +1,141 @@
+<%
+/*
+ * sharp — two-column header, shaded contact band, coloured links.
+ * Data: it.contact, it.sections, it.meta, it.fmt (see src/render/format.ts).
+ */
+const channels = it.fmt.channels(it.contact);
+%><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><%= it.fmt.join([it.contact.name, it.contact.headline], ' — ') %></title>
+<style>
+  @page { size: letter; margin: 0.5in 0.55in; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10pt;
+    line-height: 1.3;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  a { color: #c00000; text-decoration: none; }
+
+  .identity {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12pt;
+  }
+
+  .identity h1 {
+    margin: 0;
+    font-size: 17pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.15;
+  }
+
+  .identity .headline {
+    margin: 0;
+    font-size: 17pt;
+    font-weight: 400;
+    color: #333;
+    text-transform: uppercase;
+    text-align: right;
+    line-height: 1.15;
+  }
+
+  .contact {
+    display: flex;
+    justify-content: space-between;
+    gap: 8pt 18pt;
+    margin-top: 5pt;
+    margin-bottom: 14pt;
+    padding: 4pt 6pt;
+    background: #f2f2f2;
+    font-size: 9pt;
+  }
+
+  .contact ul { list-style: none; margin: 0; padding: 0; }
+  .contact li { color: #c00000; }
+  .contact .links { text-align: right; }
+  .contact .links a { font-weight: 700; }
+
+  section h2 {
+    margin: 13pt 0 3pt;
+    font-size: 11.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  section:first-of-type h2 { margin-top: 0; }
+
+  article.entry {
+    margin-bottom: 10pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  article.entry h3 { margin: 0; font-size: 11pt; font-weight: 700; }
+
+  article.entry .meta {
+    margin: 0 0 2pt;
+    font-size: 10pt;
+    font-style: italic;
+    color: #333;
+  }
+
+  article.entry .meta .org { color: #000; }
+
+  ul.bullets { margin: 0; padding-left: 0.22in; }
+  ul.bullets li { margin-bottom: 1pt; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="identity">
+      <h1><%= it.contact.name %></h1>
+      <% if (it.contact.headline) { %><p class="headline"><%= it.contact.headline %></p><% } %>
+    </div>
+    <% if (channels.primary.length || channels.links.length) { %>
+    <div class="contact">
+      <ul class="primary">
+        <% channels.primary.forEach(function (value) { %><li><%= value %></li><% }) %>
+      </ul>
+      <ul class="links">
+        <% channels.links.forEach(function (link) { %><li><a href="<%= link.url %>"><%= link.url %></a></li><% }) %>
+      </ul>
+    </div>
+    <% } %>
+  </header>
+
+  <main>
+    <% it.sections.forEach(function (section) { %>
+    <section>
+      <h2><%= section.name %></h2>
+      <% if (section.entries) { %>
+        <% section.entries.forEach(function (entry) { %>
+        <article class="entry">
+          <h3><%= entry.title %></h3>
+          <p class="meta"><span class="org"><%= entry.org %></span> — <%= it.fmt.meta(entry) %></p>
+          <ul class="bullets">
+            <% entry.bullets.forEach(function (bullet) { %><li><%= bullet.text %></li><% }) %>
+          </ul>
+        </article>
+        <% }) %>
+      <% } else { %>
+        <ul class="bullets">
+          <% (section.bullets || []).forEach(function (bullet) { %><li><%= bullet.text %></li><% }) %>
+        </ul>
+      <% } %>
+    </section>
+    <% }) %>
+  </main>
+</body>
+</html>

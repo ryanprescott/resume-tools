@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title><%= it.contact.name %></title>
+  <style>
+    @page {
+      size: letter;
+      margin: 0.5in 0.6in;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.35;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    a {
+      color: #C53030;
+      text-decoration: none;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14pt;
+    }
+    .header-left, .header-right {
+      display: flex;
+      flex-direction: column;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .name {
+      font-size: 20pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+    }
+    .headline {
+      font-size: 18pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5pt;
+    }
+    .contact-line {
+      color: #C53030;
+      font-size: 10pt;
+      margin-top: 2pt;
+    }
+    .section {
+      margin-bottom: 12pt;
+    }
+    .section-title {
+      font-size: 13pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: #C53030;
+      border-bottom: 1.5pt solid #C53030;
+      padding-bottom: 3pt;
+      margin-bottom: 8pt;
+    }
+    .section-text {
+      font-size: 10.5pt;
+      line-height: 1.4;
+    }
+    .entry {
+      margin-bottom: 10pt;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .entry-title {
+      font-size: 11pt;
+      font-weight: bold;
+    }
+    .entry-meta {
+      font-size: 10.5pt;
+      margin-bottom: 4pt;
+    }
+    .entry-org {
+      font-style: italic;
+    }
+    .entry-bullets {
+      list-style-type: disc;
+      margin-left: 18pt;
+      padding-left: 0;
+    }
+    .entry-bullets li {
+      margin-bottom: 1pt;
+      padding-left: 2pt;
+    }
+    .bullet-list {
+      list-style-type: disc;
+      margin-left: 18pt;
+    }
+    .bullet-list li {
+      margin-bottom: 1pt;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <div class="name"><%= it.contact.name %></div>
+      <% var channels = it.fmt.channels(it.contact); %>
+      <% channels.primary.forEach(function(item) { %>
+      <div class="contact-line"><%= item %></div>
+      <% }); %>
+    </div>
+    <div class="header-right">
+      <% if (it.contact.headline) { %>
+      <div class="headline"><%= it.contact.headline %></div>
+      <% } %>
+      <% var channels = it.fmt.channels(it.contact); %>
+      <% channels.links.forEach(function(link) { %>
+      <div class="contact-line"><a href="<%= link.url %>"><%= link.url %></a></div>
+      <% }); %>
+    </div>
+  </header>
+
+  <% it.sections.forEach(function(section) { %>
+  <section class="section">
+    <h2 class="section-title"><%= section.name %></h2>
+    <% if (section.entries) { %>
+      <% section.entries.forEach(function(entry) { %>
+      <div class="entry">
+        <div class="entry-title"><%= entry.title %></div>
+        <div class="entry-meta">
+          <span class="entry-org"><%= entry.org %></span> — <%= it.fmt.dates(entry) %>
+        </div>
+        <% if (entry.bullets && entry.bullets.length > 0) { %>
+        <ul class="entry-bullets">
+          <% entry.bullets.forEach(function(bullet) { %>
+          <li><%= bullet.text %></li>
+          <% }); %>
+        </ul>
+        <% } %>
+      </div>
+      <% }); %>
+    <% } else { %>
+      <% if (section.bullets && section.bullets.length > 0) { %>
+      <div class="section-text">
+        <%= section.bullets.map(function(b) { return b.text; }).join(' • ') %>
+      </div>
+      <% } %>
+    <% } %>
+  </section>
+  <% }); %>
+</body>
+</html>

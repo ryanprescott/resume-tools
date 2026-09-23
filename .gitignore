@@ -1,0 +1,23 @@
+# Dependencies & build output
+node_modules/
+dist/
+out/
+*.log
+
+# Personal data: your resumes, facts, generated PDFs, and job descriptions
+resumes/
+jds/
+
+# Local environment & secrets
+.env
+.env.*
+
+# Claude Code per-machine settings
+.claude/settings.local.json
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
