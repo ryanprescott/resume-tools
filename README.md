@@ -284,7 +284,8 @@ occupation: `resumes/base.resume.md`, plus any number under `resumes/bases/`.
 At the **Base** stage every base is matched against the job. The match uses
 each base's occupation, headline, summary, skills and roles, and the jobs
 already tailored from it (read from the variants' `meta.basedOn`). You get the
-closest base and a fit rating:
+closest base and a fit rating, and the model flags every entry in any base
+that bears on the job:
 
 | Fit | Meaning | Default |
 |---|---|---|
@@ -292,10 +293,16 @@ closest base and a fit rating:
 | partial | adjacent; reweighting covers most of it | tailor from it as usual |
 | different occupation | experience needs reframing around what transfers | **pivot** |
 
+Whichever base you pick, relevant entries from your *other* bases that it
+lacks are offered first, pre-checked, to bring in as they stand — a help desk
+job your IT Support base has should not have to be typed again when an
+engineering posting wants it. Entries brought in count as evidence and are
+offered for write-back into the chosen base at the end.
+
 A **pivot** does three things differently:
 
-1. **It asks about related work your resume leaves out.** The model lists 4–8
-   kinds of roles relevant to the job that your base does not show (for an IT
+1. **It asks about related work none of your resumes show.** The model lists
+   up to 8 kinds of roles relevant to the job that no base shows (for an IT
    Support job: help desk, sysadmin, retail tech support). Pick the ones you
    have done and describe each as an entry, in your own words. These entries
    are added before anything is suggested, so they count as evidence and can

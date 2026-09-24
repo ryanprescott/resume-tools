@@ -18,7 +18,7 @@ import { reviewRejections } from './rejections.js';
 import { runReview } from './review.js';
 import { runAdditions, type AdditionResult } from './additions.js';
 import { applyDecisions, withAdditions } from './apply.js';
-import { asOccupationBase, loadBases, newBasePath, type BaseInfo } from './bases.js';
+import { asOccupationBase, borrowable, loadBases, newBasePath, sameEntry, type BaseInfo } from './bases.js';
 import { routeJob, type Route } from './route.js';
 import { chooseBase, reportRoute, runRolesInterview, type PivotChoice } from './choose-base.js';
 import type { Pivot } from './suggest.js';
@@ -68,7 +68,10 @@ export interface State {
   baseIndex?: number;
   /** Set when this run moves into a new occupation, and will save a base for it. */
   pivot?: PivotChoice;
-  /** Related roles captured for a pivot, added to the base before anything else runs. */
+  /**
+   * Related roles added to the base before anything else runs: entries reused
+   * from your other bases, and in a pivot the roles you described.
+   */
   roles?: AdditionResult;
   coverage?: CoverageEntry[];
   coverageKey?: string;
@@ -117,8 +120,8 @@ export function describeStage(index: number, state: State, store: FactStore): st
       const base = state.baseIndex === undefined ? undefined : state.bases?.[state.baseIndex];
       if (!base) return 'not chosen yet';
       const from = basename(base.path);
-      if (!state.pivot) return from;
       const roles = state.roles?.additions.length ?? 0;
+      if (!state.pivot) return roles > 0 ? `${from} · ${roles} related role(s)` : from;
       return `new "${state.pivot.occupation}" base from ${from} · ${roles} related role(s)`;
     }
     case STAGE.gaps: {
@@ -242,12 +245,12 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
   const source = (): BaseInfo => state.bases![state.baseIndex!];
 
   /**
-   * What every later stage works on: the chosen base, plus — in a pivot — the
-   * related roles you described, so coverage can count them as evidence and
+   * What every later stage works on: the chosen base, plus the related roles
+   * brought in at the Base stage, so coverage can count them as evidence and
    * suggestions can reframe them.
    */
   const working = (): Resume =>
-    state.pivot && state.roles ? withAdditions(source().resume, state.roles.additions) : source().resume;
+    state.roles ? withAdditions(source().resume, state.roles.additions) : source().resume;
 
   const pivotBrief = (): Pivot | undefined =>
     state.pivot && { occupation: state.pivot.occupation, from: source().occupation };
@@ -305,15 +308,25 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
           const choice = await chooseBase(state.bases, route, job, prior);
           state.baseIndex = choice.index;
           state.pivot = choice.pivot;
-          if (state.pivot) {
-            state.roles = await runRolesInterview(
-              source().resume,
-              store,
-              route.relatedRoles,
-              state.pivot.occupation,
-              state.roles,
-            );
-          }
+          const base = source().resume;
+          // Switching base on a second pass can make a reused entry redundant.
+          const kept = state.roles && {
+            ...state.roles,
+            additions: state.roles.additions.filter(
+              (a) => a.kind !== 'entry' || !base.sections.some((s) => s.entries?.some((e) => sameEntry(e, a.entry))),
+            ),
+          };
+          state.roles = await runRolesInterview(
+            base,
+            store,
+            {
+              borrow: borrowable(state.bases, route.relevant, base),
+              relatedRoles: route.relatedRoles,
+              occupation: state.pivot?.occupation ?? job.occupation,
+              pivot: state.pivot !== undefined,
+            },
+            kept,
+          );
         } else {
           reportRoute(state.bases, route, job);
           state.baseIndex = route.baseIndex;
@@ -519,8 +532,9 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
   }
 
   // ── Write-back ────────────────────────────────────────────────────────────
-  // Into the base this run started from. In a pivot, the related roles you
-  // described are offered too: they are true of you whatever you apply for.
+  // Into the base this run started from. Related roles are offered too —
+  // reused from another base or described in a pivot, they are true of you
+  // whatever you apply for.
   if (!interactive) return;
   const plan = planWriteback(from.resume, variant);
   if (plan.length === 0) return;

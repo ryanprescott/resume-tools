@@ -1,7 +1,9 @@
 import { mkdir, readdir, readFile, access } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { parseMarkdown } from '../parse/markdown.js';
-import type { Resume } from '../model/schema.js';
+import { nextEntryId } from '../model/ids.js';
+import type { Entry, Resume } from '../model/schema.js';
+import { newBulletId } from './apply.js';
 
 /**
  * Occupation bases.
@@ -141,4 +143,64 @@ export function asOccupationBase(
   base.contact.headline = headline?.trim() || base.contact.headline;
   base.meta = { basedOn, occupation };
   return base;
+}
+
+/** An entry in another base that this run could reuse instead of asking you again. */
+export interface Borrowable {
+  base: BaseInfo;
+  section: string;
+  entry: Entry;
+}
+
+const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Whether two entries are the same job. Bases cloned from one another keep
+ * their ids, but an entry added to one base later can be minted an id another
+ * base already uses for something else — so the organisation has to agree, and
+ * then either the id or the title.
+ */
+export function sameEntry(a: Entry, b: Entry): boolean {
+  return norm(a.org) === norm(b.org) && (a.id === b.id || norm(a.title) === norm(b.title));
+}
+
+function entriesOf(resume: Resume): Array<{ section: string; entry: Entry }> {
+  return resume.sections.flatMap((s) => (s.entries ?? []).map((entry) => ({ section: s.name, entry })));
+}
+
+/**
+ * The entries flagged as relevant that `resume` does not already have, each
+ * once however many bases carry it.
+ */
+export function borrowable(
+  bases: BaseInfo[],
+  relevant: ReadonlyArray<{ baseIndex: number; entryId: string }>,
+  resume: Resume,
+): Borrowable[] {
+  const have = entriesOf(resume).map((e) => e.entry);
+  const out: Borrowable[] = [];
+  for (const { baseIndex, entryId } of relevant) {
+    const base = bases[baseIndex];
+    const found = base && entriesOf(base.resume).find((e) => e.entry.id === entryId);
+    if (!found) continue;
+    if ([...have, ...out.map((b) => b.entry)].some((e) => sameEntry(e, found.entry))) continue;
+    out.push({ base, section: found.section, entry: found.entry });
+  }
+  return out;
+}
+
+/**
+ * A copy of a borrowed entry with ids free in `taken`, which it then claims.
+ * Bullet ids are kept where they are free, so write-back into this base
+ * records the same ids the other base uses for the same lines.
+ */
+export function copyEntry(entry: Entry, taken: Set<string>): Entry {
+  const id = nextEntryId(taken);
+  taken.add(id);
+  const bullets = entry.bullets.map((b) => {
+    const bid = taken.has(b.id) ? newBulletId(b.text, [], taken) : b.id;
+    taken.add(bid);
+    return { id: bid, text: b.text };
+  });
+  return { ...structuredClone(entry), id, bullets };
 }

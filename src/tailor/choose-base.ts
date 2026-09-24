@@ -4,7 +4,8 @@ import type { Resume } from '../model/schema.js';
 import { field, note, panel, wrap } from '../ui/chrome.js';
 import { choose, pick, text, Separator } from '../ui/prompts.js';
 import { addEntry, type AdditionResult } from './additions.js';
-import type { BaseInfo } from './bases.js';
+import { collectKnownIds } from '../model/flatten.js';
+import { copyEntry, type BaseInfo, type Borrowable } from './bases.js';
 import type { FactStore } from './facts.js';
 import type { Route } from './route.js';
 import type { JobSpec } from './types.js';
@@ -112,21 +113,33 @@ export async function chooseBase(
 
 /** Facts captured for queued entries — so starting over can retract them. */
 function factIdsOf(roles: AdditionResult): string[] {
-  return roles.additions.flatMap((a) => (a.kind === 'entry' ? a.entry.bullets.map((b) => b.id) : []));
+  return roles.additions.flatMap((a) =>
+    a.kind === 'entry' ? a.entry.bullets.map((b) => b.id).filter((id) => /^u\d+$/.test(id)) : [],
+  );
+}
+
+export interface RolesPrompt {
+  /** Relevant entries your other bases have and this one lacks. */
+  borrow: Borrowable[];
+  /** Kinds of role no base shows; asked about only in a pivot. */
+  relatedRoles: string[];
+  occupation: string;
+  pivot: boolean;
 }
 
 /**
  * The related-roles interview. A resume written for one occupation leaves out
- * whatever did not serve it, and in a pivot that is often the most relevant
- * thing you have. Each role you pick becomes a whole entry — title, dates,
- * bullets in your own words — added before anything is suggested, so the
- * suggestions can reframe and reorder it like the rest.
+ * whatever did not serve it, and that is often the most relevant thing you
+ * have. What another base already says is offered first, as it stands — you
+ * wrote it once and should not have to again. Only then, in a pivot, are you
+ * asked about kinds of role no base shows. Each role becomes a whole entry,
+ * added before anything is suggested, so the suggestions can reframe and
+ * reorder it like the rest.
  */
 export async function runRolesInterview(
   resume: Resume,
   store: FactStore,
-  relatedRoles: string[],
-  occupation: string,
+  ask: RolesPrompt,
   prior: AdditionResult = { decisions: [], additions: [] },
 ): Promise<AdditionResult> {
   let out: AdditionResult = { decisions: [...prior.decisions], additions: [...prior.additions] };
@@ -149,11 +162,43 @@ export async function runRolesInterview(
     }
   }
 
-  if (out.additions.length === 0 && relatedRoles.length > 0) {
+  const fresh = out.additions.length === 0;
+
+  if (fresh && ask.borrow.length > 0) {
     console.log('');
     console.log(
       wrap(
-        `These would count for a ${occupation} job, and your resume does not show any of them. ` +
+        `Your other bases have ${ask.borrow.length === 1 ? 'an entry' : 'entries'} that would count ` +
+          `for this ${ask.occupation} job and this base leaves out. Pick any to bring in as they ` +
+          'stand — the tailoring can reframe them like the rest.',
+        2,
+        pc.dim,
+      ),
+    );
+    console.log('');
+    const chosen = await pick(
+      'Bring any of these in?',
+      ask.borrow.map((b, i) => ({
+        name: `${b.entry.title} — ${b.entry.org}  ${pc.dim(`(${b.entry.start} .. ${b.entry.end} · ${basename(b.base.path)})`)}`,
+        value: i,
+        checked: true,
+      })),
+    );
+    const taken = new Set(collectKnownIds(resume).allIds);
+    for (const i of chosen) {
+      const { section, entry } = ask.borrow[i];
+      out.additions.push({ kind: 'entry', section, entry: copyEntry(entry, taken) });
+    }
+    if (chosen.length > 0) console.log('  ' + pc.green(`✓ ${chosen.length} entr${chosen.length === 1 ? 'y' : 'ies'} queued`));
+  }
+
+  if (!ask.pivot) return out;
+
+  if (fresh && ask.relatedRoles.length > 0) {
+    console.log('');
+    console.log(
+      wrap(
+        `These would count for a ${ask.occupation} job, and none of your bases show any of them. ` +
           'Pick the ones you have actually done — paid, volunteer or on the side — and describe ' +
           'each in your own words.',
         2,
@@ -163,7 +208,7 @@ export async function runRolesInterview(
     console.log('');
     const chosen = await pick(
       'Have you done any of these?',
-      relatedRoles.map((role) => ({ name: role, value: role })),
+      ask.relatedRoles.map((role) => ({ name: role, value: role })),
     );
     for (const role of chosen) {
       console.log('');
