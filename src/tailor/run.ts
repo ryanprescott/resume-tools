@@ -28,6 +28,8 @@ import { applyWriteback, citedFactIds, planWriteback, promotedFactIds } from './
 import { renderMatchReport } from '../report/match.js';
 import { renderKeywordReport } from '../report/keywords.js';
 import { generateCoverLetter, renderCoverLetter } from '../report/cover-letter.js';
+import { lintResume } from '../lint/bullets.js';
+import { lintSummary } from '../ui/lint.js';
 import type { CoverageEntry, Decision, JobSpec, Suggestion } from './types.js';
 
 export interface TailorOptions {
@@ -537,6 +539,9 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
   for (const path of written) console.log(`  wrote ${path}`);
   if (store.added().length > 0) console.log(`  wrote ${opts.factsPath}`);
   for (const line of buildNotes) console.log(`  ${line.startsWith('⚠') ? pc.yellow(line) : note(line)}`);
+  // Tailoring rewrites bullets, so the variant's writing is worth a look of its own.
+  const findings = lintResume(variant);
+  if (findings.length > 0) console.log(`  ${lintSummary(findings)} — npm run cli -- lint ${variantPath}`);
   if (letterWarning !== '') {
     console.log('');
     console.log(pc.yellow('  ⚠ the cover letter draft did not pass the grounding check:'));

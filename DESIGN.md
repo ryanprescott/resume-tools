@@ -440,6 +440,25 @@ resume" from "not a resume", so the second gets the message it deserves:
     npm run cli -- tailor jds/acme.md
 ```
 
+### `resume-tools lint <resume.md> [--all]`
+
+Writing checks that hold whatever the job: weak openers, tense (past for a
+finished role, one tense per current role), first person, filler, phrases that
+undercut the claim, trailing "demonstrating X" clauses, length, repeated opening
+verbs, and bullets that state no result. `src/lint/bullets.ts`, no model.
+
+Deterministic because principle 6 says so, and because a check that gives the
+same answer twice is one you can act on. The heuristics lean quiet: tense is
+judged only for opening words known to be verbs, and "no result" is info rather
+than a warning, folded into a count by default — it is true of most bullets on
+most resumes, and listed one per bullet it buried everything else.
+
+`suggest` receives the warnings and a short writing guide, so tailoring fixes
+the bullets it touches and may propose a rewrite for a warning alone. It does
+not receive `no-outcome`: asking the model to add a result is asking it to
+invent one. Answering that question is a job for a future quantification
+interview, whose answers would be facts.
+
 ### `resume-tools build <resume.md> [--format pdf,html,md] [--template <name>]`
 
 One path, which is the point:
@@ -505,6 +524,9 @@ src/
     prompts.ts              themed @inquirer wrappers; Ctrl-C → Interrupted
     spinner.ts              withSpinner(), interruptible, aborts its work
     errors.ts               actionable parse-error rendering
+    lint.ts                 the lint report
+  lint/
+    bullets.ts              deterministic writing checks
   report/
     match.ts  keywords.ts  cover-letter.ts
 templates/*.html.eta        shipped and hand-written alike

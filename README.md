@@ -139,6 +139,46 @@ Lists every name `--template` accepts — everything in `templates/`.
 npm run cli -- templates
 ```
 
+### `lint <resumeFile>`
+
+Checks the writing: the things a recruiter marks down whatever the job.
+
+```bash
+npm run cli -- lint resumes/base.resume.md
+```
+
+```
+Relevant Experience › Founding Engineer — Contoso
+  r1b1   Making critical architecture decisions, building from scratch…
+         ⚠ tense  "Making" — most bullets in this role are past tense; match them
+
+· no-outcome  23 bullet(s) say what you did, not what came of it: r1b1, u2, …
+
+lint: 11 warning(s), 24 suggestion(s)
+```
+
+| Rule | Level | Flags |
+|---|---|---|
+| `weak-opener` | ⚠ | "Responsible for", "Worked on", "Helped", "Involved in" … |
+| `tense` | ⚠ | a finished role not in the past tense; a current role mixing past and present |
+| `first-person` | ⚠ | I, my, me |
+| `filler` | ⚠ | "results-driven", "passionate", "successfully", "various" … |
+| `undercut` | ⚠ | phrases that argue against the claim: "despite having no formal experience" |
+| `skill-tail` | ⚠ | a trailing "…, demonstrating X" that names a skill instead of showing it |
+| `length` | ⚠ | a bullet over 30 words; a summary over 60 |
+| `no-outcome` | · | no number and no result — shown as a count; `--all` lists each |
+| `repeated-opener` | · | one verb opening three or more bullets |
+
+Experience bullets get every check. A summary (a section named Summary, Profile,
+About or Objective) gets the prose checks and its own length limit. List
+sections such as Skills are left alone. It is deterministic and needs no login.
+
+`build` ends with a one-line count when there is something to look at, and
+`tailor` prints one for the variant it wrote. Tailoring also hands the warnings
+to the model, which fixes them in the bullets it rewrites and may propose a
+rewrite for a warning alone. `no-outcome` is not handed over: whether there is a
+number to add is a question only you can answer.
+
 ### `import <pdf>`
 
 | Option | Default | Meaning |
@@ -585,7 +625,7 @@ would mean editing all of them.
 
 ```
 src/
-  cli.ts                commander entry; build/templates/import/tailor/bases commands
+  cli.ts                commander entry; build/templates/lint/import/tailor/bases commands
   build.ts              resume → PDF/HTML/MD files; shared by build and tailor --build
   claude.ts             Agent SDK wrapper (ask<T>()) + preflight auth check
   config.ts             output dirs and PDF name pattern; flag > env > file
@@ -617,6 +657,9 @@ src/
     prompts.ts          themed @inquirer wrappers; Ctrl-C → Interrupted
     spinner.ts          withSpinner(), interruptible, aborts its work
     errors.ts           actionable parse-error rendering
+    lint.ts             the lint report, grouped by location
+  lint/
+    bullets.ts          writing checks: tense, openers, filler, length, results
   report/
     match.ts keywords.ts cover-letter.ts
 tests/
@@ -634,6 +677,9 @@ tests/
   tailor/apply.test.ts       every suggestion kind, plus structural additions
   ui/chrome.test.ts          layout maths against visible width, not bytes
   ui/errors.test.ts          "not a resume" vs "malformed resume"
+  ui/lint.test.ts            grouping, and folding the no-result count
+  lint/bullets.test.ts       each rule, tense judgement, what is left alone
+  tailor/suggest-prompt.test.ts  warnings and the writing guide reach the model
   ui/spinner.test.ts         value/error pass-through, clean non-TTY output
   fixtures/sample.resume.md
 templates/*.html.eta    shipped and hand-written alike
@@ -695,7 +741,7 @@ npm run build     # tsc -p .  → dist/
 npm run cli -- …  # tsx src/cli.ts
 ```
 
-Current state: 238 tests across 23 files, all passing; typecheck clean under
+Current state: 287 tests across 26 files, all passing; typecheck clean under
 `strict`.
 
 TypeScript is configured as ES2022 / NodeNext ESM. The package is `"type":

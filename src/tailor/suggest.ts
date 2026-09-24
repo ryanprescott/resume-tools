@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ask } from '../claude.js';
 import { collectKnownIds, flattenBullets } from '../model/flatten.js';
 import type { Resume } from '../model/schema.js';
+import { lintBrief, lintResume } from '../lint/bullets.js';
 import type { Fact } from './facts.js';
 import { SuggestionSchema, type Suggestion, type CoverageEntry, type JobSpec } from './types.js';
 
@@ -53,6 +54,22 @@ export function pivotBrief(pivot: Pivot): string {
   );
 }
 
+/**
+ * How a rewritten bullet should read. The model's default register for "make
+ * this match the job" is to bolt the job's vocabulary onto the end — "…,
+ * demonstrating LLM application development" — which a recruiter reads as
+ * keyword stuffing, and which claims more than the source says.
+ */
+export const WRITING_GUIDE =
+  '--- HOW A BULLET SHOULD READ ---\n' +
+  '- Open with a strong action verb. Past tense, except a current role may use present tense ' +
+  'if every bullet in that role does.\n' +
+  '- Then what was done, then the result where the source states one.\n' +
+  '- Use the job\'s vocabulary only where it names what the source actually describes. Never ' +
+  'append a clause like "demonstrating X", "showcasing X" or "highlighting X".\n' +
+  '- No first person, no filler adjectives ("results-driven", "passionate", "successfully"), ' +
+  'under 30 words.\n\n';
+
 export async function suggest(
   resume: Resume,
   job: JobSpec,
@@ -68,6 +85,7 @@ export async function suggest(
     .filter((c) => !c.gap)
     .map((c) => `- ${c.requirement} (evidence: ${c.evidenceIds.join(', ')})`);
   const factLines = facts.map((f) => `${f.id}: ${f.text}`).join('\n');
+  const writingIssues = lintBrief(lintResume(resume));
 
   const result = await ask({
     prompt:
@@ -86,6 +104,12 @@ export async function suggest(
       'sourceIds, and do not restate a fact the resume already covers.\n\n' +
       `--- COVERED REQUIREMENTS ---\n${covered.join('\n') || '(none)'}\n\n` +
       `--- GAPS (no direct evidence) ---\n${gaps.join('\n') || '(none)'}\n\n` +
+      `--- WRITING ISSUES (id: [rule] problem) ---\n${writingIssues || '(none)'}\n` +
+      'Found by a style check, independent of this job. Fix the issue in any rewrite you propose ' +
+      'for that id. You may also propose a rewrite solely to fix one (sourceIds: the targetId, ' +
+      'jdRef: "writing"), as long as it says the same thing — never add a number, result or ' +
+      'scope to make a bullet stronger.\n\n' +
+      WRITING_GUIDE +
       'For each suggestion set targetId to the id being changed, kind to one of ' +
       'rewrite/reorder/promote/demote/drop/add, before/after to the bullet text before and ' +
       'after, sourceIds to the id(s) the content derives from (usually just targetId itself), ' +

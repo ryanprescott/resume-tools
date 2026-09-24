@@ -14,6 +14,8 @@ import { FACTS_PATH } from './tailor/facts.js';
 import { Cancelled, Interrupted } from './ui/interrupt.js';
 import { renderParseError } from './ui/errors.js';
 import { withSpinner } from './ui/spinner.js';
+import { lintResume } from './lint/bullets.js';
+import { lintSummary, renderLint } from './ui/lint.js';
 import type { Resume } from './model/schema.js';
 
 /** The base resume everything starts from, and the one `import` writes. */
@@ -79,8 +81,21 @@ program
       for (const line of notes) (line.startsWith('⚠') ? console.warn : console.log)(line);
       for (const path of written) console.log(`wrote ${path}`);
       if (templateName) console.log(`template: ${templateName}`);
+
+      const findings = lintResume(resume);
+      if (findings.length > 0) console.log(`${lintSummary(findings)} — npm run cli -- lint ${resumeFile}`);
     },
   );
+
+program
+  .command('lint')
+  .description('check a resume for weak openers, mixed tense, filler, overlong bullets and missing results')
+  .argument('<resumeFile>', 'path to a *.resume.md file')
+  .option('--all', 'list every bullet that states no result, rather than a count', false)
+  .action(async (resumeFile: string, opts: { all: boolean }) => {
+    const resume = await readResume(resumeFile, `npm run cli -- tailor ${resumeFile}`);
+    console.log(renderLint(resume, lintResume(resume), { all: opts.all }));
+  });
 
 program
   .command('templates')
