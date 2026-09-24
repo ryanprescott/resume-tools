@@ -103,6 +103,19 @@ function slugify(...parts: string[]): string {
     .replace(/^-+|-+$/g, '');
 }
 
+/**
+ * The name a variant and its reports share. Without a company the job file's
+ * name stands in, and that is usually named for the role already —
+ * `barclays-senior-engineer.md` would otherwise give
+ * `senior-engineer-barclays-senior-engineer`.
+ */
+export function variantSlug(title: string, company: string | undefined, jdFile: string): string {
+  if (company) return slugify(title, company);
+  const fromFile = slugify(basename(jdFile, extname(jdFile)));
+  const titled = slugify(title);
+  return fromFile.includes(titled) ? fromFile : slugify(title, fromFile);
+}
+
 function countDecisions(decisions: Decision[]): Record<string, number> {
   const counts: Record<string, number> = { accept: 0, edit: 0, reject: 0, skip: 0 };
   for (const d of decisions) counts[d.action] += 1;
@@ -419,7 +432,7 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
   // The posting's own company name wins over the file it arrived in; the file
   // name is only a fallback for the slug, never written into the resume.
   const company = opts.company ?? (job.company || undefined);
-  const slug = slugify(job.title, company ?? basename(opts.jdFile, extname(opts.jdFile)));
+  const slug = variantSlug(job.title, company, opts.jdFile);
   const variant = applyDecisions(
     working(),
     decisions,

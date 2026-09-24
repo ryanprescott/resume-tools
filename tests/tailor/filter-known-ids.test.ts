@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterKnownIds } from '../../src/tailor/coverage.js';
+import { alignCoverage, filterKnownIds } from '../../src/tailor/coverage.js';
 import { filterKnownSuggestions } from '../../src/tailor/suggest.js';
 import type { CoverageEntry, Suggestion } from '../../src/tailor/types.js';
 
@@ -93,5 +93,38 @@ describe('filterKnownSuggestions', () => {
       ];
       expect(filterKnownSuggestions(suggestions, knownIds, factIds)).toEqual([]);
     });
+  });
+});
+
+describe('alignCoverage', () => {
+  const entry = (requirement: string, evidenceIds: string[] = ['r1b1']): CoverageEntry => ({
+    requirement,
+    evidenceIds,
+    gap: evidenceIds.length === 0,
+  });
+
+  it('turns every requirement the model skipped into a gap', () => {
+    expect(alignCoverage(['Kubernetes', 'Rust'], [])).toEqual([
+      { requirement: 'Kubernetes', evidenceIds: [], gap: true },
+      { requirement: 'Rust', evidenceIds: [], gap: true },
+    ]);
+  });
+
+  it('matches by text regardless of order, case or spacing', () => {
+    const result = alignCoverage(['Kubernetes', 'Rust'], [entry('rust '), entry('kubernetes', [])]);
+    expect(result.map((c) => [c.requirement, c.gap])).toEqual([
+      ['Kubernetes', true],
+      ['Rust', false],
+    ]);
+  });
+
+  it('falls back to position for a paraphrase when every requirement was answered', () => {
+    const result = alignCoverage(['5+ years of Go'], [entry('Five years of Go')]);
+    expect(result).toEqual([{ requirement: '5+ years of Go', evidenceIds: ['r1b1'], gap: false }]);
+  });
+
+  it('does not trust position when the model answered only some requirements', () => {
+    const result = alignCoverage(['Go', 'Rust'], [entry('Golang')]);
+    expect(result.every((c) => c.gap)).toBe(true);
   });
 });

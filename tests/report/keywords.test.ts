@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderKeywordReport } from '../../src/report/keywords.js';
+import { containsKeyword, renderKeywordReport } from '../../src/report/keywords.js';
 import type { Resume } from '../../src/model/schema.js';
 import type { JobSpec } from '../../src/tailor/types.js';
 
@@ -43,5 +43,32 @@ describe('renderKeywordReport', () => {
     const report = renderKeywordReport({ ...job, keywords: ['kubernetes'] }, resume);
     const presentSection = report.split('## Absent')[0];
     expect(presentSection).toContain('- kubernetes');
+  });
+});
+
+describe('containsKeyword', () => {
+  it('does not find an acronym inside a longer word', () => {
+    expect(containsKeyword('Configured Cisco switches and ticketing systems', 'CIS')).toBe(false);
+    expect(containsKeyword('Configured Cisco switches and ticketing systems', 'EMS')).toBe(false);
+  });
+
+  it('finds a term at punctuation boundaries', () => {
+    expect(containsKeyword('Stack: Go, Rust.', 'Rust')).toBe(true);
+    expect(containsKeyword('Built APIs in Node.js', 'node.js')).toBe(true);
+  });
+
+  it('treats spaces, hyphens and slashes in a keyword as interchangeable', () => {
+    expect(containsKeyword('Full stack developer', 'full-stack')).toBe(true);
+    expect(containsKeyword('CI/CD pipelines', 'CI CD')).toBe(true);
+  });
+
+  it('counts a plural as present', () => {
+    expect(containsKeyword('Managed switch configurations', 'configuration')).toBe(true);
+    expect(containsKeyword('Wrote Python scripts', 'script')).toBe(true);
+  });
+
+  it('keeps C distinct from C++ and C#', () => {
+    expect(containsKeyword('Wrote C++ and C#', 'C')).toBe(false);
+    expect(containsKeyword('Wrote C++ and C#', 'C++')).toBe(true);
   });
 });

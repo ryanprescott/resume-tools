@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { STAGE, describeStage, navigatorChoices, type NavChoice, type State } from '../../src/tailor/run.js';
+import { STAGE, describeStage, navigatorChoices, variantSlug, type NavChoice, type State } from '../../src/tailor/run.js';
 import { seedSlots } from '../../src/tailor/review.js';
 import { FactStore } from '../../src/tailor/facts.js';
 import { emptyInterview } from '../../src/tailor/interview.js';
@@ -165,5 +165,21 @@ describe('seedSlots', () => {
   it('leaves everything undecided when there is no prior pass', () => {
     const slots = seedSlots([suggestion(), suggestion({ targetId: 'r1b2' })], []);
     expect(slots.every((s) => s.verdict === undefined)).toBe(true);
+  });
+});
+
+describe('variantSlug', () => {
+  it('names the variant for the title and company', () => {
+    expect(variantSlug('Staff Engineer', 'Acme Corp', 'jds/whatever.md')).toBe('staff-engineer-acme-corp');
+  });
+
+  it('does not repeat the title when the job file is already named for it', () => {
+    expect(variantSlug('Senior Engineer, VP', undefined, 'jds/barclays-senior-engineer-vp.md')).toBe(
+      'barclays-senior-engineer-vp',
+    );
+  });
+
+  it('adds the title when the job file does not carry it', () => {
+    expect(variantSlug('Staff Engineer', undefined, 'jds/unknown-3.pdf')).toBe('staff-engineer-unknown-3');
   });
 });
