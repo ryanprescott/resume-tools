@@ -73,6 +73,14 @@
     }
     .entry {
       margin-bottom: 10pt;
+    }
+    /* Break a long job between bullets rather than pushing it whole onto
+       the next page; keep headings with what follows them. */
+    .section-title, .entry-title, .entry-meta {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    .entry-bullets li {
       break-inside: avoid;
       page-break-inside: avoid;
     }

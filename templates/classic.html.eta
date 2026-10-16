@@ -63,6 +63,16 @@ const channels = it.fmt.channels(it.contact);
 
   article.entry {
     margin-bottom: 9pt;
+  }
+  /* A job longer than the room left on a page must be free to break, or
+     Chrome pushes the whole entry over and leaves the page blank below it.
+     So break between bullets, never inside one, and keep a heading with
+     what follows it. */
+  section h2, article.entry h3, article.entry .meta {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  article.entry li {
     break-inside: avoid;
     page-break-inside: avoid;
   }

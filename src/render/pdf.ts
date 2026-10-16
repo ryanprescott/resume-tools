@@ -12,7 +12,10 @@ async function launch(): Promise<Browser> {
     return await puppeteer.launch({
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: ['--no-sandbox', '--font-render-hinting=none'],
+      // Without --disable-gpu, where the GPU process cannot start (WSL, no
+      // display), Chrome keeps relaunching it and the page stops responding
+      // after a handful of prints — and fitting prints many times.
+      args: ['--no-sandbox', '--disable-gpu', '--font-render-hinting=none'],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

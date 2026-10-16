@@ -76,9 +76,11 @@ describe('built-in templates', () => {
     expect(source).toContain('print-color-adjust: exact');
   });
 
-  it.each(names)('%s avoids splitting an entry across pages', async (name) => {
+  it.each(names)('%s breaks long entries between bullets, not before them', async (name) => {
     const { source } = await loadTemplate(name, templatesDir);
-    expect(source).toContain('break-inside: avoid');
+    expect(source).toMatch(/\bli\s*\{[^}]*break-inside: avoid/s);
+    // Avoiding breaks in a whole entry pushes a long job onto the next page.
+    expect(source).not.toMatch(/\.entry\s*\{[^}]*break-inside: avoid/s);
   });
 
   it.each(names)('%s is self-contained — no external assets', async (name) => {

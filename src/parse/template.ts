@@ -41,8 +41,11 @@ const OUTPUT_RULES = `Requirements for the template you produce:
 - Set the print box with @page { size: ...; margin: ...; } and use pt units for type.
 - Include -webkit-print-color-adjust: exact and print-color-adjust: exact on body,
   or Chrome will drop background colours when printing.
-- Add break-inside: avoid and page-break-inside: avoid to each entry block so a job
-  is never split across pages.
+- Let long jobs break across pages between bullets: put break-inside: avoid and
+  page-break-inside: avoid on each bullet <li>, and break-after: avoid and
+  page-break-after: avoid on section headings and entry titles/meta lines. Do NOT
+  put break-inside: avoid on a whole entry — a job taller than the space left on
+  the page then gets pushed whole onto the next page, leaving a blank gap.
 - Render EVERY section, entry and bullet the data contains. Never hard-code the
   resume's actual wording, job titles, or section names into the markup — read them
   all from \`it\`. The template must work for a different resume.
