@@ -59,6 +59,11 @@ export async function ask<T>(opts: AskOptions<T>): Promise<T> {
       if (msg.subtype !== 'success') {
         throw new Error(`claude query failed: ${msg.errors?.join('; ') ?? msg.subtype}`);
       }
+      // A "success" result can still lack structured output — e.g. when not
+      // logged in, the result text is "Invalid API key · Please run /login".
+      if (msg.structured_output === undefined) {
+        throw new Error(`claude query returned no structured output: ${msg.result || '(empty response)'}`);
+      }
       return opts.schema.parse(msg.structured_output);
     }
   }
