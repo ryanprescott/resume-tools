@@ -1,19 +1,165 @@
 # resume-tools
 
-A CLI for keeping one canonical resume in structured Markdown, styling it with
-swappable HTML/CSS templates, and exporting it to PDF and HTML — plus a
-Claude-assisted path for tailoring it to a specific job description without
-fabricating anything.
+**Keep one master copy of your resume, and get a tailored, well-formatted
+version for each job you apply to — without the tool making anything up.**
 
-See [Project status](#project-status) for what exists today, and
-[DESIGN.md](DESIGN.md) for the architecture.
+Most people keep a dozen copies of their resume, each edited by hand for a
+different application, with the formatting slowly drifting apart. resume-tools
+replaces that with:
+
+- **One master resume** in plain text (Markdown) that you own and can edit in
+  any editor. Import it from the PDF you already have, so you don't start from
+  scratch.
+- **Tailoring with Claude.** Point it at a job posting and it works out what the
+  job asks for, finds where your experience already covers it, and suggests
+  rewordings and reorderings that put the most relevant parts first. You approve
+  every change, one at a time.
+- **No fabrication.** Every suggested edit has to cite something your resume (or
+  you) actually said, and a separate check throws out anything that claims
+  experience you don't have. Where the job asks for something your resume
+  doesn't mention, it *asks you* instead of guessing, and remembers your answer
+  for next time.
+- **Polished PDFs.** Your resume is printed through an HTML/CSS template, so it
+  looks the same every time. It can be squeezed onto one page automatically, and
+  the file is named for the company (`jane_doe_acme.pdf`).
+- **Extras for each application:** a match report (which requirements you meet
+  and which you don't), a keyword check, a draft cover letter, and a writing
+  lint that flags weak phrasing like "Responsible for…".
+
+Your master resume is never changed without your say-so. Each tailored version
+is saved as its own file.
+
+## Quick start
+
+You need **Node.js 24+**, a logged-in [Claude Code](https://claude.com/claude-code)
+CLI (`claude login`; no API key needed), and `pdftotext` (from poppler-utils:
+`sudo apt install poppler-utils` or `brew install poppler`).
+
+### 1. Install
+
+```bash
+npm install
+```
+
+This also downloads the copy of Chrome used to print PDFs.
+
+### 2. Import your existing resume
+
+```bash
+npm run cli -- import ~/Downloads/my-resume.pdf
+```
+
+This reads your PDF and writes two things:
+
+- `resumes/base.resume.md`: your resume as structured Markdown. This is your
+  master copy from now on.
+- `templates/imported-<date>.html.eta`: a template that copies the look of your
+  original PDF.
+
+Open the Markdown and check it over. It's a first draft of a transcription.
+
+### 3. Add job descriptions to `jds/`
+
+Save each posting you're interested in as a file in the `jds/` folder. Paste the
+text into a `.md` or `.txt` file, or drop in the PDF or Word (`.docx`) file the
+recruiter sent:
+
+```bash
+mkdir -p jds
+# then save the posting as, e.g., jds/acme-senior-engineer.md
+```
+
+`jds/` and `resumes/` are git-ignored, so your personal data stays out of the
+repository.
+
+### 4. Tailor your resume to a job
+
+```bash
+npm run cli -- tailor jds/acme-senior-engineer.md
+```
+
+This walks you through six short steps: confirm what the job asks for, pick
+which base resume to start from, answer questions about gaps, review the
+suggested edits, and add anything that's missing. It writes:
+
+| File | What it is |
+|---|---|
+| `resumes/variants/<title>-<company>.resume.md` | the tailored resume |
+| `out/<title>-<company>.match.md` | which requirements you meet, and the gaps |
+| `out/<title>-<company>.keywords.md` | the job's keywords, and which appear in your resume |
+| `out/<title>-<company>.cover-letter.md` | a draft cover letter |
+
+Press **Ctrl-C** at any point to go back a step instead of quitting.
+
+### 5. Build the PDF
+
+```bash
+npm run cli -- build resumes/variants/senior-engineer-acme.resume.md --pages 1
+```
+
+The PDF lands in `resumes/pdfs/`, named for the company. Drop `--pages 1` to
+keep your template's natural length.
+
+You can also tailor and build in one go:
+
+```bash
+npm run cli -- tailor jds/acme-senior-engineer.md --pages 1
+```
+
+Or build your master resume as-is:
+
+```bash
+npm run cli -- build resumes/base.resume.md
+```
+
+### Other everyday commands
+
+```bash
+npm run cli -- lint resumes/base.resume.md   # check the writing
+npm run cli -- templates                     # list the available looks
+npm run cli -- bases                         # list your base resumes and what each was used for
+npm run cli -- help tailor                   # every option for a command
+```
 
 ---
 
-## What it does today
+## Table of contents
+
+- [Quick start](#quick-start)
+- [Requirements](#requirements)
+- [Commands](#commands)
+  - [`build <resumeFile>`](#build-resumefile)
+  - [Fitting to a page count](#fitting-to-a-page-count)
+  - [`templates`](#templates)
+  - [`lint <resumeFile>`](#lint-resumefile)
+  - [`import <pdf>`](#import-pdf)
+  - [`tailor <jdFile>`](#tailor-jdfile)
+  - [Going back](#going-back)
+  - [Occupation bases](#occupation-bases)
+  - [Telling it things it doesn't know](#telling-it-things-it-doesnt-know)
+- [Configuration](#configuration)
+  - [The PDF name pattern](#the-pdf-name-pattern)
+- [The canonical format](#the-canonical-format)
+  - [Grammar](#grammar)
+  - [Two kinds of section](#two-kinds-of-section)
+  - [IDs, and why they are HTML comments](#ids-and-why-they-are-html-comments)
+  - [Parse errors](#parse-errors)
+- [How templates work](#how-templates-work)
+  - [What a template receives](#what-a-template-receives)
+  - [Templates are code, so their output is checked](#templates-are-code-so-their-output-is-checked)
+- [Architecture](#architecture)
+  - [The model](#the-model)
+  - [Rendering](#rendering)
+- [Development](#development)
+  - [The test that matters most](#the-test-that-matters-most)
+- [Design principles](#design-principles)
+- [Project status](#project-status)
+
+The rest of this document covers how the tool works underneath. See
+[DESIGN.md](DESIGN.md) for the full architecture write-up.
 
 ```
-resumes/base.resume.md    ← content: you edit this (canonical, git-tracked)
+resumes/base.resume.md    ← content: you edit this (canonical, git-ignored)
 templates/*.html.eta      ← layout: swappable, referenced by name
         │
         ▼
@@ -22,16 +168,18 @@ templates/*.html.eta      ← layout: swappable, referenced by name
                 out/base.resume.md             (normalized round-trip)
 ```
 
-The PDF is the file you actually send to someone, so it lands in its own
-directory and can be named for the reader — `jane_doe_acme.pdf` — while the
-HTML and normalized Markdown stay build artifacts in `out/`. See
-[Configuration](#configuration).
-
 A strict Markdown parser turns `*.resume.md` into a typed model. A template is a
 self-contained HTML document with all its CSS inline and Eta (EJS-syntax) tags
 where the content goes. `build` merges the two and prints the result with headless
-Chrome, so a template can do anything CSS can — two-column headers, shaded bands,
+Chrome, so a template can do anything CSS can: two-column headers, shaded bands,
 coloured links, sidebars.
+
+The PDF is the file you actually send to someone, so it lands in its own
+directory and can be named for the reader (`jane_doe_acme.pdf`), while the HTML
+and normalized Markdown stay build artifacts in `out/`. See
+[Configuration](#configuration).
+
+---
 
 ## Requirements
 
@@ -40,19 +188,21 @@ coloured links, sidebars.
 | Node.js | **≥ 24** (enforced via `engines`) |
 | Chrome | bundled with `puppeteer` on `npm install` (~1.3 GB) — required only for PDF output |
 | `pdftotext` | poppler-utils — required by `import` for the coverage cross-check, and by `tailor` when the job description is a PDF |
+| `claude` CLI | logged in (`claude login`) — required by `import` and `tailor` |
 
 Set `PUPPETEER_EXECUTABLE_PATH` to reuse a system Chrome instead of the bundled
 one. Verified working against Node 24.11.1 and Puppeteer 23.11.1.
 
-## Install
+Claude access goes through the Claude Agent SDK, which reuses the existing
+logged-in `claude` CLI session. There is no API key anywhere in this codebase,
+and none is needed.
 
-```bash
-npm install
-```
+---
 
-## Usage
+## Commands
 
-The CLI is run through `tsx` — there is no build-and-link step needed for daily use.
+The CLI is run through `tsx`, so there is no build-and-link step needed for
+daily use.
 
 ```bash
 npm run cli -- build resumes/base.resume.md
@@ -91,6 +241,10 @@ The PDF is named by `--pdf-name`, which defaults to your name plus the company,
 role or recruiter. PDF and HTML come from the same merged document, so they
 always match. That holds when fitting too: the HTML is the fitted document.
 
+Note that `--format md` is not a no-op copy — it re-serializes the parsed model,
+which normalizes spacing and ID comments. It is a useful way to see the canonical
+form of a file you hand-edited.
+
 ### Fitting to a page count
 
 `--pages 1` squeezes the resume onto one page. This works with any template,
@@ -126,10 +280,6 @@ designed. Nothing measures "empty": whether gentle tightening can absorb it
 ```
 pulled a nearly empty page 3 back: 2 pages with spacing 78%, margins 85% (--no-fit to keep it as designed)
 ```
-
-Note that `--format md` is not a no-op copy — it re-serializes the parsed model,
-which normalizes spacing and ID comments. It is a useful way to see the canonical
-form of a file you hand-edited.
 
 ### `templates`
 
@@ -233,12 +383,13 @@ tailoring and building are one step:
 npm run cli -- tailor jds/acme.md --pages 1
 ```
 
-The job description can be Markdown, plain text, or a PDF — the recruiter's
-attachment works as well as a paste. The format is decided by the file's first
-bytes, not its extension, so a PDF saved as `role.txt` is still read as a PDF
-rather than as a screenful of mojibake. PDFs go through `pdftotext -layout`,
-which keeps two-column pages readable; an image-only scan has no text to extract
-and is reported as such instead of being sent to the model empty.
+The job description can be Markdown, plain text, a PDF or a Word `.docx` — the
+recruiter's attachment works as well as a paste. The format is decided by the
+file's first bytes, not its extension, so a PDF saved as `role.txt` is still
+read as a PDF rather than as a screenful of mojibake. PDFs go through
+`pdftotext -layout`, which keeps two-column pages readable; an image-only scan
+has no text to extract and is reported as such instead of being sent to the
+model empty. A legacy binary `.doc` is named as unreadable rather than guessed at.
 
 ```
 ━━ 1/6 Job          the extracted spec — title, company, recruiter, occupation,
@@ -553,7 +704,7 @@ for what it is rather than reported as a syntax error on line 1:
 
 ---
 
-## Templates
+## How templates work
 
 A resume names a template; it never embeds one. `templates/<name>.html.eta` is a
 complete, self-contained HTML document with all its CSS in one inline `<style>`
@@ -634,7 +785,7 @@ src/
     ids.ts              ID minting and content-hash stability
   parse/
     markdown.ts         parseMarkdown / serializeMarkdown (deterministic, strict)
-    jd.ts               readJd() — job description text, from Markdown or PDF
+    jd.ts               readJd() — job description text, from Markdown, PDF or .docx
     pdf.ts              importPdf() + checkCoverage() pdftotext cross-check
     template.ts         PDF → Eta template via Claude, verified by rendering
   template/
@@ -683,16 +834,19 @@ tests/
   ui/spinner.test.ts         value/error pass-through, clean non-TTY output
   fixtures/sample.resume.md
 templates/*.html.eta    shipped and hand-written alike
+jds/                    job descriptions you tailor against (git-ignored)
 resumes/base.resume.md
+resumes/bases/          occupation bases, one per occupation
+resumes/variants/       tailored resumes, one per job
 resumes/facts.md        claims you supplied, not yet in the resume
 resumes/pdfs/           printed PDFs — the files you send
-out/                    build artifacts (git-ignored)
+out/                    build artifacts and tailor reports (git-ignored)
 ```
 
 ### The model
 
 `src/model/schema.ts` defines the whole data model in zod. The design intent is
-that this one schema drives three things: parser output validation (today),
+that this one schema drives three things: parser output validation, the
 `outputFormat` JSON Schema for Claude, and renderer input.
 
 ```ts
@@ -705,7 +859,8 @@ Bullet  { id, text }
 Meta    { basedOn?, occupation?, job?: { title, company?, recruiter? } }   // bases / variants
 ```
 
-`template` is a name, not an embedded blob — see [Templates](#templates-1).
+`template` is a name, not an embedded blob — see
+[How templates work](#how-templates-work).
 
 Everything is a plain string, including dates — `start` and `end` hold whatever
 the resume says (`2022-03`, `present`), because normalizing them would only
@@ -721,9 +876,11 @@ default.
 `printBackground` so shaded bands survive, and `preferCSSPageSize` so the
 template's `@page` rule owns the page size and margins.
 
-> **Gotcha, already handled:** Chrome applies print styles only under the `print`
-> media type. `renderPdf` calls `emulateMediaType('print')` before printing —
-> without it, `@page` is ignored entirely and you get default letter margins.
+> [!NOTE]
+> **Gotcha, already handled:** Chrome applies print styles only under the
+> `print` media type. `renderPdf` calls `emulateMediaType('print')` before
+> printing — without it, `@page` is ignored entirely and you get default letter
+> margins.
 
 There is deliberately **no DOCX output.** It previously existed as an ATS-plain
 second path, but maintaining a permanently-inferior renderer alongside the
@@ -756,9 +913,9 @@ follows it consistently.
 - `parse(serialize(parse(x)))` deep-equals `parse(x)` — a fixed point
 - `serialize` is byte-identical on the second pass — idempotent
 
-These are the invariants that make it safe for a future `tailor` command to
-patch the model and write the file back out. If you touch the grammar, this test
-is the one to keep green.
+These are the invariants that make it safe for `tailor` to patch the model and
+write the file back out. If you touch the grammar, this test is the one to keep
+green.
 
 `tests/parse/markdown.test.ts` covers the failure modes deliberately: a missing
 ID comment, a malformed meta line, and an orphan bullet appearing before the
@@ -806,8 +963,4 @@ Taken from [DESIGN.md](DESIGN.md); they explain most of the choices above.
 | **M1** | Schema, Markdown parser/serializer, template layer, PDF renderer, round-trip tests | **Done** — `build` works end to end |
 | **M2** | `import`: PDF → model *and* PDF → template via Claude, with coverage cross-checks | **Done** — `import` works end to end |
 | **M3** | `tailor`: JD analysis → coverage → suggestions → fabrication verify → apply, plus match / keyword / cover-letter reports | **Done** — `tailor` works end to end |
-| **M4** | Interactive tailoring: five checkpoints, user-supplied facts with write-back, `@inquirer` console | **Done** |
-
-Claude access goes through the Claude Agent SDK, which reuses the existing
-logged-in `claude` CLI session. There is no API key anywhere in this codebase,
-and none is needed.
+| **M4** | Interactive tailoring: six checkpoints, occupation bases, user-supplied facts with write-back, `@inquirer` console | **Done** |
