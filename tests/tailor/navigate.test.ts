@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { STAGE, describeStage, navigatorChoices, variantSlug, type NavChoice, type State } from '../../src/tailor/run.js';
-import { seedSlots } from '../../src/tailor/review.js';
+import { seedSlots, summaryLine } from '../../src/tailor/review.js';
 import { FactStore } from '../../src/tailor/facts.js';
 import { emptyInterview } from '../../src/tailor/interview.js';
 import type { Decision, JobSpec, Suggestion } from '../../src/tailor/types.js';
@@ -165,6 +165,30 @@ describe('seedSlots', () => {
   it('leaves everything undecided when there is no prior pass', () => {
     const slots = seedSlots([suggestion(), suggestion({ targetId: 'r1b2' })], []);
     expect(slots.every((s) => s.verdict === undefined)).toBe(true);
+  });
+});
+
+describe('summaryLine', () => {
+  it('shows a rewrite as its id and new text', () => {
+    const line = plain(summaryLine(suggestion({ targetId: 'r1b1', before: 'old', after: 'new text' })));
+    expect(line.trim()).toBe('r1b1 new text');
+  });
+
+  it('shows what a drop removes, since it has no new text', () => {
+    const line = plain(summaryLine(suggestion({ targetId: 'r6b1', kind: 'drop', before: 'old bullet', after: '' })));
+    expect(line.trim()).toBe('r6b1 drop old bullet');
+  });
+
+  it('names the kind of a move, whose text reads as unchanged', () => {
+    const line = plain(summaryLine(suggestion({ kind: 'promote', before: 'same', after: 'same' })));
+    expect(line).toContain('promote same');
+  });
+
+  it('wraps on visible width, not on the length of the colour codes', () => {
+    const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(' ');
+    const lines = plain(summaryLine(suggestion({ after: long }))).split('\n');
+    expect(lines.length).toBeGreaterThan(1);
+    expect(Math.max(...lines.map((l) => l.length))).toBeLessThanOrEqual(96);
   });
 });
 

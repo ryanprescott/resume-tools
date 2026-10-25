@@ -94,6 +94,9 @@ Press **Ctrl-C** at any point to go back a step instead of quitting.
 
 ### 5. Build the PDF
 
+At the end of a tailoring run you're asked whether to build the PDF now. Say
+yes and it's built straight away. To build one yourself, any time:
+
 ```bash
 npm run cli -- build resumes/variants/senior-engineer-acme.resume.md --pages 1
 ```
@@ -411,6 +414,12 @@ model empty. A legacy binary `.doc` is named as unreadable rather than guessed a
 Then it offers to promote what you added into `resumes/base.resume.md`. That is
 the only thing that ever writes to the base, and it never happens without a
 prompt.
+
+Last, it asks whether to build the variant now. Yes ends the tailor session and
+starts a separate `build` of the variant, with any `--pdf-out`, `--pdf-name`,
+`--pages`, `--no-fit` and `--template` you gave `tailor` passed along. No prints
+the command to run later. With `--build` or `--pages` the variant is already
+built, so it doesn't ask.
 
 | Option | Default | Meaning |
 |---|---|---|

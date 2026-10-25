@@ -1,7 +1,7 @@
 import pc from 'picocolors';
 import { describeLocation, locate } from '../model/flatten.js';
 import type { Resume } from '../model/schema.js';
-import { diffPair, field, meter, panel, wrap } from '../ui/chrome.js';
+import { diffPair, field, layout, meter, panel, termWidth, type Token } from '../ui/chrome.js';
 import { choose, text, yesNo, Separator } from '../ui/prompts.js';
 import type { FactStore } from './facts.js';
 import type { Decision, Suggestion } from './types.js';
@@ -127,9 +127,7 @@ export async function runReview(
   const undecided = slots.filter((slot) => slot.verdict === undefined);
   if (undecided.length > 0) {
     console.log('');
-    for (const slot of undecided) {
-      console.log(wrap(`${pc.bold(slot.suggestion.targetId)} ${slot.suggestion.after}`, 2));
-    }
+    for (const slot of undecided) console.log(summaryLine(slot.suggestion));
     console.log('');
     const change = await yesNo(
       `Do you want to make any of your own changes to these ${undecided.length} edit(s)?`,
@@ -193,6 +191,19 @@ export async function runReview(
 
   console.log('\n' + tally(slots));
   return { decisions: toDecisions(slots) };
+}
+
+/**
+ * One suggestion as a single wrapped line for the at-a-glance list. A drop has
+ * no `after`, so it shows what goes, struck through; anything other than a
+ * rewrite names its kind, since the text alone would read as unchanged.
+ */
+export function summaryLine(s: Suggestion): string {
+  const tokens: Token[] = [{ text: s.targetId, style: pc.bold }];
+  if (s.kind !== 'rewrite') tokens.push({ text: s.kind, style: pc.dim });
+  if (s.kind === 'drop') tokens.push({ text: s.before, style: (w) => pc.dim(pc.strikethrough(w)) });
+  else tokens.push({ text: s.after || s.before });
+  return layout(tokens, termWidth(), 2);
 }
 
 function toDecisions(slots: Slot[]): Decision[] {

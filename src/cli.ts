@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { parseMarkdown, serializeMarkdown } from './parse/markdown.js';
@@ -39,6 +40,20 @@ async function readResume(file: string, suggestion?: string): Promise<Resume> {
     console.error(rendered);
     process.exit(1);
   }
+}
+
+/**
+ * Run this CLI again as a child process, with the same Node and loader flags
+ * (`tsx` under `npm run cli`), sharing the terminal. Resolves to its exit code.
+ */
+function runSelf(args: string[]): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [...process.execArgv, process.argv[1], ...args], {
+      stdio: 'inherit',
+    });
+    child.on('error', reject);
+    child.on('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+  });
 }
 
 program
@@ -186,7 +201,7 @@ program
         `npm run cli -- tailor ${jdFile} --from <your-resume>.resume.md`,
       );
 
-      await runTailor({
+      const result = await runTailor({
         jdFile,
         root: { path: from, resume },
         pinned: opts.from !== undefined,
@@ -201,6 +216,19 @@ program
             ? { ...config, formats: ['pdf', 'html'], template: opts.template, autoFit: opts.fit }
             : undefined,
       });
+      if (!result.build) return;
+
+      // The build runs as its own process rather than inside this one: the
+      // tailor session is over, and a fresh `build` is exactly what you would
+      // have typed next. The build flags given to tailor carry over.
+      const args = ['build', result.variantPath, '--format', 'pdf,html', '--out', config.outDir];
+      if (opts.pdfOut !== undefined) args.push('--pdf-out', opts.pdfOut);
+      if (opts.pdfName !== undefined) args.push('--pdf-name', opts.pdfName);
+      if (opts.pages !== undefined) args.push('--pages', opts.pages);
+      if (!opts.fit) args.push('--no-fit');
+      if (opts.template !== undefined) args.push('--template', opts.template);
+      console.log('');
+      process.exit(await runSelf(args));
     },
   );
 

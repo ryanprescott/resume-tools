@@ -50,6 +50,12 @@ export interface TailorOptions {
   build?: BuildOptions;
 }
 
+export interface TailorResult {
+  variantPath: string;
+  /** You asked, at the end of an interactive run, to build the variant now. */
+  build: boolean;
+}
+
 const STAGES = ['Job', 'Base', 'Gaps', 'Cut', 'Review', 'Additions'] as const;
 
 /** Stage positions by name, so nothing below depends on counting. */
@@ -245,7 +251,7 @@ async function navigate(current: number, state: State, store: FactStore): Promis
  * cannot — and each is escapable with Ctrl-C, because noticing the job title is
  * wrong while reading suggestion nine should not mean starting over.
  */
-export async function runTailor(opts: TailorOptions): Promise<void> {
+export async function runTailor(opts: TailorOptions): Promise<TailorResult> {
   const jdText = await readJd(opts.jdFile);
   const interactive = !opts.yes && process.stdin.isTTY === true;
 
@@ -553,44 +559,62 @@ export async function runTailor(opts: TailorOptions): Promise<void> {
   // Into the base this run started from. Related roles are offered too —
   // reused from another base or described in a pivot, they are true of you
   // whatever you apply for.
-  if (!interactive) return;
-  const plan = planWriteback(from.resume, variant);
-  if (plan.length === 0) return;
+  const writeBack = async (): Promise<void> => {
+    const plan = planWriteback(from.resume, variant);
+    if (plan.length === 0) return;
 
+    try {
+      console.log('');
+      console.log(
+        note(`  ${plan.length} thing(s) you added are only in this variant. Put any of them in ${from.path}?`),
+      );
+      const chosen = await pick(
+        'Write back to the base resume?',
+        plan.map((item, i) => ({
+          name:
+            item.kind === 'entry'
+              ? `${item.entry.title} — ${item.entry.org}  ${pc.dim(`(${item.where})`)}`
+              : `${item.text.slice(0, 62)}${item.text.length > 62 ? '…' : ''}  ${pc.dim(`(${item.where})`)}`,
+          value: i,
+        })),
+      );
+      if (chosen.length === 0) {
+        console.log(note(`  left in ${opts.factsPath}`));
+        return;
+      }
+
+      const selected = chosen.map((i) => plan[i]);
+      const updated = applyWriteback(from.resume, selected);
+      await writeFile(from.path, serializeMarkdown(updated), 'utf8');
+      console.log(`  ${pc.green('✓')} updated ${from.path}`);
+
+      // A fact now in the base resume would otherwise be offered as new material
+      // again on the next run, so it leaves the staging file.
+      const promoted = promotedFactIds(selected);
+      facts = facts.filter((fact) => !promoted.has(fact.id));
+      await saveFacts(facts, opts.factsPath);
+      console.log(`  ${pc.green('✓')} retired ${promoted.size} fact(s) from ${opts.factsPath}`);
+    } catch (err) {
+      // Everything above is already on disk; declining the write-back is fine.
+      if (!(err instanceof Interrupted)) throw err;
+      console.log(note(`  left in ${opts.factsPath}`));
+    }
+  };
+
+  if (!interactive) return { variantPath, build: false };
+  await writeBack();
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  // Offered last, so the build is the whole of what is left to do: the caller
+  // ends this session and runs it as a fresh `build`.
+  if (opts.build) return { variantPath, build: false };
+  let build = false;
   try {
     console.log('');
-    console.log(
-      note(`  ${plan.length} thing(s) you added are only in this variant. Put any of them in ${from.path}?`),
-    );
-    const chosen = await pick(
-      'Write back to the base resume?',
-      plan.map((item, i) => ({
-        name:
-          item.kind === 'entry'
-            ? `${item.entry.title} — ${item.entry.org}  ${pc.dim(`(${item.where})`)}`
-            : `${item.text.slice(0, 62)}${item.text.length > 62 ? '…' : ''}  ${pc.dim(`(${item.where})`)}`,
-        value: i,
-      })),
-    );
-    if (chosen.length === 0) {
-      console.log(note(`  left in ${opts.factsPath}`));
-      return;
-    }
-
-    const selected = chosen.map((i) => plan[i]);
-    const updated = applyWriteback(from.resume, selected);
-    await writeFile(from.path, serializeMarkdown(updated), 'utf8');
-    console.log(`  ${pc.green('✓')} updated ${from.path}`);
-
-    // A fact now in the base resume would otherwise be offered as new material
-    // again on the next run, so it leaves the staging file.
-    const promoted = promotedFactIds(selected);
-    facts = facts.filter((fact) => !promoted.has(fact.id));
-    await saveFacts(facts, opts.factsPath);
-    console.log(`  ${pc.green('✓')} retired ${promoted.size} fact(s) from ${opts.factsPath}`);
+    build = await yesNo('Build the PDF for this variant now?', { default: true });
   } catch (err) {
-    // Everything above is already on disk; declining the write-back is fine.
     if (!(err instanceof Interrupted)) throw err;
-    console.log(note(`  left in ${opts.factsPath}`));
   }
+  if (!build) console.log(note(`  build it later with: npm run cli -- build ${variantPath}`));
+  return { variantPath, build };
 }
