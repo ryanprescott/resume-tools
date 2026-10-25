@@ -79,8 +79,9 @@ npm run cli -- tailor jds/acme-senior-engineer.md
 ```
 
 This walks you through six short steps: confirm what the job asks for, pick
-which base resume to start from, answer questions about gaps, review the
-suggested edits, and add anything that's missing. It writes:
+which base resume to start from, answer questions about gaps, look over the
+suggested edits (and change any you want to), and add anything that's missing.
+It writes:
 
 | File | What it is |
 |---|---|
@@ -401,8 +402,9 @@ model empty. A legacy binary `.doc` is named as unreadable rather than guessed a
                     you can actually speak to and answer in your own words
 ━━ 4/6 Cut          what the fabrication check killed, and why — keep any of it
                     by re-attributing the claim to yourself
-━━ 5/6 Review       accept / edit / reject / add, one at a time, with the
-                    rationale shown and `back` to change your mind
+━━ 5/6 Review       the suggested edits, listed. Answer no to "any changes?"
+                    and they are all accepted; yes walks them one at a time —
+                    accept / edit / reject / add, with `back` to change your mind
 ━━ 6/6 Additions    bullets, list lines or whole entries no suggestion proposed
 ```
 

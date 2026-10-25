@@ -1,8 +1,8 @@
 import pc from 'picocolors';
 import { describeLocation, locate } from '../model/flatten.js';
 import type { Resume } from '../model/schema.js';
-import { diffPair, field, meter, panel } from '../ui/chrome.js';
-import { choose, text, Separator } from '../ui/prompts.js';
+import { diffPair, field, meter, panel, wrap } from '../ui/chrome.js';
+import { choose, text, yesNo, Separator } from '../ui/prompts.js';
 import type { FactStore } from './facts.js';
 import type { Decision, Suggestion } from './types.js';
 
@@ -121,6 +121,27 @@ export async function runReview(
     return { decisions: [] };
   }
 
+  // Stepping through every suggestion is the longest stage in the run, and
+  // most of the time you would accept them all anyway. Show what is on the
+  // table and only walk it if you want to change something.
+  const undecided = slots.filter((slot) => slot.verdict === undefined);
+  if (undecided.length > 0) {
+    console.log('');
+    for (const slot of undecided) {
+      console.log(wrap(`${pc.bold(slot.suggestion.targetId)} ${slot.suggestion.after}`, 2));
+    }
+    console.log('');
+    const change = await yesNo(
+      `Do you want to make any of your own changes to these ${undecided.length} edit(s)?`,
+      { default: false },
+    );
+    if (!change) {
+      for (const slot of undecided) slot.verdict = 'accept';
+      console.log('\n' + tally(slots));
+      return { decisions: toDecisions(slots) };
+    }
+  }
+
   let index = 0;
   let quit = false;
 
@@ -170,14 +191,16 @@ export async function runReview(
     index += 1;
   }
 
-  const decisions: Decision[] = slots.map((slot) => ({
+  console.log('\n' + tally(slots));
+  return { decisions: toDecisions(slots) };
+}
+
+function toDecisions(slots: Slot[]): Decision[] {
+  return slots.map((slot) => ({
     suggestion: slot.suggestion,
     action: slot.verdict ?? 'skip',
     editedText: slot.editedText,
   }));
-
-  console.log('\n' + tally(slots));
-  return { decisions };
 }
 
 /**
